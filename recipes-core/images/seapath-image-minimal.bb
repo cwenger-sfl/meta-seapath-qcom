@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 require recipes-core/images/core-image-minimal.bb
+inherit image-qcom-deploy
 
 DESCRIPTION = "A minimal image that is compatible with SEAPATH PAM policy"
 LICENSE = "Apache-2.0"
