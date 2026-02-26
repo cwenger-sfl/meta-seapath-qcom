@@ -13,3 +13,8 @@ IMAGE_FSTYPES:append = " ext4"
 IMAGE_FSTYPES:remove = "wic.gz"
 IMAGE_FSTYPES:remove = "wic.bmap"
 IMAGE_FSTYPES:remove = "wic.qcow2"
+
+do_tar_image_boot_directory:qcom() {
+    cp -r ${IMAGE_ROOTFS}/EFI ${IMAGE_ROOTFS}/boot/
+    tar -cJhf ${IMGDEPLOYDIR}/${IMAGE_BASENAME}-boot.tar.xz -C ${IMAGE_ROOTFS}/boot ./EFI ./Image
+}
