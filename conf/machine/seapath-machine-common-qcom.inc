@@ -18,3 +18,5 @@ APPEND += " \
     page_alloc.shuffle=1 \
     rng_core.default_quality=500 \
 "
+
+PREFERRED_VERSION_libvirt = "11.4.0"
