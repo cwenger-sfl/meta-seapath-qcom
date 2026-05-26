@@ -9,3 +9,6 @@ SRC_URI += " \
     file://ovs.cfg \
     file://realtime.cfg \
     "
+
+# Enable debug traces in Kernel and tracing tools support (like LTTng or perf).
+SRC_URI:append:seapath-lttng = " file://traces.cfg"
