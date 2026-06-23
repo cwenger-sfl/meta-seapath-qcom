@@ -14,3 +14,5 @@ do_tar_image_boot_directory:qcom() {
 
 do_generate_seapath_metadata:qcom() {
 }
+
+require ${@bb.utils.contains('DISTRO_FEATURES', 'seapath-overlay', 'overlay-qcom.inc', '', d)}
