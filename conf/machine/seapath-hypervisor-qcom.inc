@@ -16,3 +16,5 @@ APPEND += " \
 
 PREFERRED_PROVIDER_virtual/kernel = "linux-qcom-rt"
 PREFERRED_VERSION_linux-qcom-rt = "6.18.%"
+
+QCOM_PARTITION_FILES_SUBDIR = "partitions/${MACHINE}/ufs"
