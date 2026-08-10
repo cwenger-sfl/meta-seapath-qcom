@@ -8,7 +8,10 @@ SRC_URI += " \
     file://overlayfs.cfg \
     file://ovs.cfg \
     file://realtime.cfg \
+    file://0001-sched-fair-skip-newidle-balance-when-RT-task-is-runn.patch \
     file://0002-clocksource-arm_arch_timer-add-Cortex-A78C-OOL-worka.patch \
+    file://0003-sched-core-skip-sched_balance_trigger-in-sched_tick-.patch \
+    file://0005-arm64-disable-SCHED_CORE-for-non-SMT-RT-systems.patch \
     file://0006-arch-arm64-arch_timer-skip-ISB-on-counter-read-for-1.patch \
     file://0007-clocksource-arm_arch_timer-add-programming-tracepoin.patch \
     file://0009-irqchip-gic-v3-add-irq-delivery-tracepoints.patch \
