@@ -1,0 +1,142 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Charles Wenger <charles.wenger@savoirfairelinux.com>
+Date: Tue, 11 Aug 2026 20:30:00 +0200
+Subject: [PATCH] irqchip/gic-v3: add IRQ delivery tracepoints
+
+Upstream-Status: Inappropriate [diagnostic]
+
+Trace GICv3 interrupt acknowledge, priority drop, dispatch, handler exit and
+EOI points to separate delivery latency from IRQ handler latency.
+
+Signed-off-by: Charles Wenger <charles.wenger@savoirfairelinux.com>
+---
+ drivers/irqchip/irq-gic-v3.c | 10 ++++++++++
+ include/trace/events/gic_v3.h | 60 +++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 70 insertions(+)
+ create mode 100644 include/trace/events/gic_v3.h
+
+diff --git a/drivers/irqchip/irq-gic-v3.c b/drivers/irqchip/irq-gic-v3.c
+--- a/drivers/irqchip/irq-gic-v3.c
++++ b/drivers/irqchip/irq-gic-v3.c
+@@ -38,6 +38,9 @@
+ 
+ #include "irq-gic-common.h"
+ 
++#define CREATE_TRACE_POINTS
++#include <trace/events/gic_v3.h>
++
+ static u8 dist_prio_irq __ro_after_init = GICV3_PRIO_IRQ;
+ static u8 dist_prio_nmi __ro_after_init = GICV3_PRIO_NMI;
+ 
+@@ -718,6 +721,7 @@
+ 
+ static void gic_eoi_irq(struct irq_data *d)
+ {
++	trace_gic_v3_irq_eoi(irqd_to_hwirq(d));
+ 	write_gicreg(irqd_to_hwirq(d), ICC_EOIR1_EL1);
+ 	isb();
+ 
+@@ -845,6 +849,7 @@
+  */
+ static inline void gic_complete_ack(u32 irqnr)
+ {
++	trace_gic_v3_irq_complete(irqnr);
+ 	if (static_branch_likely(&supports_deactivate_key))
+ 		write_gicreg(irqnr, ICC_EOIR1_EL1);
+ 
+@@ -870,11 +875,13 @@
+		return;
+ 
+ 	gic_complete_ack(irqnr);
++	trace_gic_v3_irq_dispatch(irqnr);
+ 
+ 	if (generic_handle_domain_irq(gic_data.domain, irqnr)) {
+ 		WARN_ONCE(true, "Unexpected interrupt (irqnr %u)\n", irqnr);
+ 		gic_deactivate_unhandled(irqnr);
+ 	}
++	trace_gic_v3_irq_handler_exit(irqnr);
+ }
+ 
+ static void __gic_handle_nmi(u32 irqnr, struct pt_regs *regs)
+@@ -907,6 +914,7 @@
+ 	u32 irqnr;
+ 
+ 	irqnr = gic_read_iar();
++	trace_gic_v3_irq_ack(irqnr);
+ 
+ 	is_nmi = gic_rpr_is_nmi_prio();
+ 
+@@ -956,6 +964,7 @@
+ 	gic_pmr_mask_irqs();
+ 	isb();
+ 	irqnr = gic_read_iar();
++	trace_gic_v3_irq_ack(irqnr);
+ 	gic_write_pmr(pmr);
+ 
+ 	__gic_handle_nmi(irqnr, regs);
+
+diff --git a/include/trace/events/gic_v3.h b/include/trace/events/gic_v3.h
+new file mode 100644
+--- /dev/null
++++ b/include/trace/events/gic_v3.h
+@@ -0,0 +1,60 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#undef TRACE_SYSTEM
++#define TRACE_SYSTEM gic_v3
++
++#if !defined(_TRACE_GIC_V3_H) || defined(TRACE_HEADER_MULTI_READ)
++#define _TRACE_GIC_V3_H
++
++#include <linux/tracepoint.h>
++
++TRACE_EVENT(gic_v3_irq_ack,
++
++	TP_PROTO(u32 intid),
++	TP_ARGS(intid),
++	TP_STRUCT__entry(__field(u32, intid)),
++	TP_fast_assign(__entry->intid = intid;),
++	TP_printk("intid=%u", __entry->intid)
++);
++
++TRACE_EVENT(gic_v3_irq_complete,
++
++	TP_PROTO(u32 intid),
++	TP_ARGS(intid),
++	TP_STRUCT__entry(__field(u32, intid)),
++	TP_fast_assign(__entry->intid = intid;),
++	TP_printk("intid=%u", __entry->intid)
++);
++
++TRACE_EVENT(gic_v3_irq_dispatch,
++
++	TP_PROTO(u32 intid),
++	TP_ARGS(intid),
++	TP_STRUCT__entry(__field(u32, intid)),
++	TP_fast_assign(__entry->intid = intid;),
++	TP_printk("intid=%u", __entry->intid)
++);
++
++TRACE_EVENT(gic_v3_irq_handler_exit,
++
++	TP_PROTO(u32 intid),
++	TP_ARGS(intid),
++	TP_STRUCT__entry(__field(u32, intid)),
++	TP_fast_assign(__entry->intid = intid;),
++	TP_printk("intid=%u", __entry->intid)
++);
++
++TRACE_EVENT(gic_v3_irq_eoi,
++
++	TP_PROTO(u64 intid),
++	TP_ARGS(intid),
++	TP_STRUCT__entry(__field(u64, intid)),
++	TP_fast_assign(__entry->intid = intid;),
++	TP_printk("intid=%llu", __entry->intid)
++);
++#endif
++
++#undef TRACE_INCLUDE_PATH
++#define TRACE_INCLUDE_PATH trace/events
++#undef TRACE_INCLUDE_FILE
++#define TRACE_INCLUDE_FILE gic_v3
++#include <trace/define_trace.h>
