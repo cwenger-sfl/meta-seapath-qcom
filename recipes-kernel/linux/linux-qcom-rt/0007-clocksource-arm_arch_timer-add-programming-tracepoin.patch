@@ -1,0 +1,205 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Charles Wenger <charles.wenger@savoirfairelinux.com>
+Date: Tue, 11 Aug 2026 14:00:00 +0200
+Subject: [PATCH] clocksource: arm_arch_timer: add programming tracepoints
+
+Upstream-Status: Inappropriate [diagnostic]
+
+Add opt-in tracepoints around architectural timer programming and IRQ
+entry. Record the requested deadline and CTRL without reading the timer
+back in the normal arm event. An independent readback event can be
+enabled for a second test to check TVAL, while the IRQ event shows how
+far the deadline has passed when the interrupt reaches the CPU.
+
+The additional system-register reads are guarded by the tracepoint
+static keys and therefore only occur while the events are enabled.
+
+Signed-off-by: Charles Wenger <charles.wenger@savoirfairelinux.com>
+---
+ drivers/clocksource/arm_arch_timer.c  | 36 +++++++++++++++++++
+ include/trace/events/arch_timer.h     | 92 ++++++++++++++++++++++++++++++++++++
+ 2 files changed, 128 insertions(+)
+ create mode 100644 include/trace/events/arch_timer.h
+
+diff --git a/drivers/clocksource/arm_arch_timer.c b/drivers/clocksource/arm_arch_timer.c
+index fb91918..193213f 100644
+--- a/drivers/clocksource/arm_arch_timer.c
++++ b/drivers/clocksource/arm_arch_timer.c
+@@ -29,6 +29,9 @@
+ #include <linux/arm-smccc.h>
+ #include <linux/ptp_kvm.h>
+ 
++#define CREATE_TRACE_POINTS
++#include <trace/events/arch_timer.h>
++
+ #include <asm/arch_timer.h>
+ #include <asm/virt.h>
+ 
+@@ -306,6 +309,33 @@ static u64 notrace sun50i_a64_read_cntvct_el0(void)
+ }
+ #endif
+ 
++static __always_inline s32 arch_timer_read_tval(const int access)
++{
++	if (access == ARCH_TIMER_PHYS_ACCESS)
++		return (s32)read_sysreg(cntp_tval_el0);
++
++	return (s32)read_sysreg(cntv_tval_el0);
++}
++
++static __always_inline void arch_timer_trace_arm(const int access,
++						 unsigned long evt,
++						 unsigned long ctrl)
++{
++	if (trace_timer_arm_enabled())
++		trace_timer_arm(access, evt, ctrl);
++
++	if (trace_timer_arm_readback_enabled())
++		trace_timer_arm_readback(access, evt,
++					 arch_timer_read_tval(access), ctrl);
++}
++
++static __always_inline void arch_timer_trace_irq(const int access,
++						 unsigned long ctrl)
++{
++	if (trace_timer_irq_enabled())
++		trace_timer_irq(access, arch_timer_read_tval(access), ctrl);
++}
++
+ #ifdef CONFIG_ARM64_ERRATUM_1418040
+ /*
+  * Cortex-A78C erratum 1418040: ISB before MRS cntpct_el0 stalls ~148us
+@@ -326,6 +356,7 @@ erratum_1418040_set_next_event_phys(unsigned long evt,
+ 	ctrl &= ~ARCH_TIMER_CTRL_IT_MASK;
+ 	arch_timer_reg_write_cp15(ARCH_TIMER_PHYS_ACCESS, ARCH_TIMER_REG_CTRL, ctrl);
+ 	write_sysreg((u32)evt, cntp_tval_el0);
++	arch_timer_trace_arm(ARCH_TIMER_PHYS_ACCESS, evt, ctrl);
+ 	return 0;
+ }
+ 
+@@ -340,6 +371,7 @@ erratum_1418040_set_next_event_virt(unsigned long evt,
+ 	ctrl &= ~ARCH_TIMER_CTRL_IT_MASK;
+ 	arch_timer_reg_write_cp15(ARCH_TIMER_VIRT_ACCESS, ARCH_TIMER_REG_CTRL, ctrl);
+ 	write_sysreg((u32)evt, cntv_tval_el0);
++	arch_timer_trace_arm(ARCH_TIMER_VIRT_ACCESS, evt, ctrl);
+ 	return 0;
+ }
+ #endif /* CONFIG_ARM64_ERRATUM_1418040 */
+@@ -567,6 +599,8 @@ static __always_inline irqreturn_t timer_handler(const int access,
+ 
+ 	ctrl = arch_timer_reg_read_cp15(access, ARCH_TIMER_REG_CTRL);
+ 	if (ctrl & ARCH_TIMER_CTRL_IT_STAT) {
++		arch_timer_trace_irq(access, ctrl);
++
+ 		ctrl |= ARCH_TIMER_CTRL_IT_MASK;
+ 		arch_timer_reg_write_cp15(access, ARCH_TIMER_REG_CTRL, ctrl);
+ 		evt->event_handler(evt);
+@@ -629,6 +663,8 @@ static __always_inline void set_next_event(const int access, unsigned long evt,
+ 
+ 	arch_timer_reg_write_cp15(access, ARCH_TIMER_REG_CVAL, evt + cnt);
+ 	arch_timer_reg_write_cp15(access, ARCH_TIMER_REG_CTRL, ctrl);
++
++	arch_timer_trace_arm(access, evt, ctrl);
+ }
+ 
+ static int arch_timer_set_next_event_virt(unsigned long evt,
+diff --git a/include/trace/events/arch_timer.h b/include/trace/events/arch_timer.h
+new file mode 100644
+index 0000000..8e8f843
+--- /dev/null
++++ b/include/trace/events/arch_timer.h
+@@ -0,0 +1,92 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#undef TRACE_SYSTEM
++#define TRACE_SYSTEM arch_timer
++
++#if !defined(_TRACE_ARCH_TIMER_H) || defined(TRACE_HEADER_MULTI_READ)
++#define _TRACE_ARCH_TIMER_H
++
++#include <linux/tracepoint.h>
++
++#define show_arch_timer_access(access) \
++	__print_symbolic(access, \
++		{ 0, "phys" }, \
++		{ 1, "virt" })
++
++TRACE_EVENT(timer_arm,
++
++	TP_PROTO(int access, unsigned long evt, unsigned long ctrl),
++
++	TP_ARGS(access, evt, ctrl),
++
++	TP_STRUCT__entry(
++		__field(int, access)
++		__field(unsigned long, evt)
++		__field(unsigned long, ctrl)
++	),
++
++	TP_fast_assign(
++		__entry->access = access;
++		__entry->evt = evt;
++		__entry->ctrl = ctrl;
++	),
++
++	TP_printk("access=%s evt=%lu ctrl=0x%lx",
++		  show_arch_timer_access(__entry->access),
++		  __entry->evt, __entry->ctrl)
++);
++
++TRACE_EVENT(timer_arm_readback,
++
++	TP_PROTO(int access, unsigned long evt, s32 tval, unsigned long ctrl),
++
++	TP_ARGS(access, evt, tval, ctrl),
++
++	TP_STRUCT__entry(
++		__field(int, access)
++		__field(unsigned long, evt)
++		__field(s32, tval)
++		__field(unsigned long, ctrl)
++	),
++
++	TP_fast_assign(
++		__entry->access = access;
++		__entry->evt = evt;
++		__entry->tval = tval;
++		__entry->ctrl = ctrl;
++	),
++
++	TP_printk("access=%s evt=%lu tval=%d ctrl=0x%lx",
++		  show_arch_timer_access(__entry->access), __entry->evt,
++		  __entry->tval, __entry->ctrl)
++);
++
++TRACE_EVENT(timer_irq,
++
++	TP_PROTO(int access, s32 tval, unsigned long ctrl),
++
++	TP_ARGS(access, tval, ctrl),
++
++	TP_STRUCT__entry(
++		__field(int, access)
++		__field(s32, tval)
++		__field(unsigned long, ctrl)
++	),
++
++	TP_fast_assign(
++		__entry->access = access;
++		__entry->tval = tval;
++		__entry->ctrl = ctrl;
++	),
++
++	TP_printk("access=%s tval=%d ctrl=0x%lx",
++		  show_arch_timer_access(__entry->access),
++		  __entry->tval, __entry->ctrl)
++);
++
++#endif /* _TRACE_ARCH_TIMER_H */
++
++#undef TRACE_INCLUDE_PATH
++#define TRACE_INCLUDE_PATH trace/events
++#undef TRACE_INCLUDE_FILE
++#define TRACE_INCLUDE_FILE arch_timer
++#include <trace/define_trace.h>
+-- 
+2.50.1
