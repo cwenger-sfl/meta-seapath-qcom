@@ -12,6 +12,9 @@ APPEND += " \
     skew_tick=1 \
     rcutree.kthread_prio=10 \
     kvm.halt_poll_ns=0 \
+    isolcpus=2-7 \
+    nohz_full=2-7 \
+    rcu_nocbs=2-7 \
     "
 
 PREFERRED_PROVIDER_virtual/kernel = "linux-qcom-rt"
