@@ -11,7 +11,6 @@ SRC_URI += " \
     file://0001-sched-fair-skip-newidle-balance-when-RT-task-is-runn.patch \
     file://0002-clocksource-arm_arch_timer-add-Cortex-A78C-OOL-worka.patch \
     file://0003-sched-core-skip-sched_balance_trigger-in-sched_tick-.patch \
-    file://0005-arm64-disable-SCHED_CORE-for-non-SMT-RT-systems.patch \
     file://0006-arch-arm64-arch_timer-skip-ISB-on-counter-read-for-1.patch \
     "
 # Enable debug traces in Kernel and tracing tools support (like LTTng or perf).
