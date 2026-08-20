@@ -1,8 +1,16 @@
 #!/bin/bash
-ALLOW_CPUS="0,1"
-RT_CPUS="2,3,4,5,6,7"
+if [ "$(nproc --all)" -eq 6 ]; then
+	# Guest VM: keep vCPU0 for housekeeping and reserve vCPU1-5 for RT.
+	ALLOW_CPUS="0"
+	RT_CPUS="1,2,3,4,5"
+	SV_IRQ_CPU="0"
+else
+	# QCOM hypervisor host.
+	ALLOW_CPUS="0,1"
+	RT_CPUS="2,3,4,5,6,7"
+    SV_IRQ_CPU="1"
+fi
 SV_INTERFACE="end0"
-SV_IRQ_CPU="1"
 
 for policy in /sys/devices/system/cpu/cpufreq/policy*; do
 	[ -w "$policy/scaling_governor" ] && echo performance > "$policy/scaling_governor"
