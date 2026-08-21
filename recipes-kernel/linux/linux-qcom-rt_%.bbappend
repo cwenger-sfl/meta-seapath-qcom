@@ -16,4 +16,4 @@ SRC_URI += " \
     file://0009-irqchip-gic-v3-add-irq-delivery-tracepoints.patch \
     "
 # Enable debug traces in Kernel and tracing tools support (like LTTng or perf).
-SRC_URI:append:seapath-lttng = " file://traces.cfg"
+SRC_URI:append:seapath-lttng = " file://traces.cfg file://tunes.cfg"
