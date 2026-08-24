@@ -4,11 +4,13 @@ if [ "$(nproc --all)" -eq 6 ]; then
     # ALLOW_CPUS="0"
     RT_CPUS="0,1,2,3,4,5"
     SV_IRQ_CPU="0"
+    echo RT_RUNTIME_SHARE > /sys/kernel/debug/sched/features
 else
     # QCOM hypervisor host.
     ALLOW_CPUS="0,1"
     RT_CPUS="2,3,4,5,6,7"
     SV_IRQ_CPU="1"
+    echo 1 > /sys/devices/system/cpu/cpufreq/boost
 fi
 SV_INTERFACE="end0"
 
@@ -25,15 +27,6 @@ done
 
 echo 0 > /proc/sys/kernel/timer_migration
 echo -1 > /proc/sys/kernel/sched_rt_runtime_us
-
-if [ "$(nproc --all)" -eq 6  ]; then
-    echo RT_RUNTIME_SHARE > /sys/kernel/debug/sched/features
-
-    # No isolation in the VM
-    exit 0
-fi
-
-echo 1 > /sys/devices/system/cpu/cpufreq/boost
 
 cpu_list_to_mask() {
    MASK=0
